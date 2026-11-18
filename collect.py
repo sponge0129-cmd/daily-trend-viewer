@@ -2,7 +2,7 @@
 """GitHub Pages용 정적 스냅샷 빌더.
 server.py의 수집 함수를 재사용해 모든 탭 데이터를 JSON으로 저장하고,
 핫링크가 막힌 썸네일(인스타/틱톡/트위터 CDN)은 내려받아 로컬 파일로 바꿉니다.
-GitHub Actions가 1시간마다 실행해 결과를 GitHub Pages로 배포합니다.
+GitHub Actions가 매일 아침 7시(한국)에 실행해 결과를 GitHub Pages로 배포합니다.
 사용: python3 collect.py [출력폴더=_site]
 """
 import hashlib
@@ -147,27 +147,12 @@ def main():
     write_json("categories.json", {"categories": ["전체", "AI"] + list(server.CATEGORIES)})
     collect_videos()
 
-    reels, accounts, fetched = server.get_reels(False)
-    reels = reels[:80]
-    n = download_images(reels, "thumbnail")
-    data = carry_forward("reels.json", "reels",
-                         {"reels": reels, "accounts": accounts, "fetchedAt": fetched})
-    write_json("reels.json", data)
-    print("릴스: %d개 (썸네일 %d개)" % (len(data["reels"]), n))
-
-    posts, accounts, fetched = server.get_x_posts(False)
-    n = download_images(posts, "media")
-    data = carry_forward("x.json", "posts",
-                         {"posts": posts, "accounts": accounts, "fetchedAt": fetched})
-    write_json("x.json", data)
-    print("X: %d개 (이미지 %d개)" % (len(data["posts"]), n))
-
-    posts, accounts, fetched = server.get_threads_posts(False)
-    n = download_images(posts, "media")
-    data = carry_forward("threads.json", "posts",
-                         {"posts": posts, "accounts": accounts, "fetchedAt": fetched})
-    write_json("threads.json", data)
-    print("스레드: %d개 (이미지 %d개)" % (len(data["posts"]), n))
+    # 11/18: 릴스·X·스레드(인스타·메타·미러) 수집은 하지 않음 — 유튜브·틱톡·AI 뉴스만
+    now = time.strftime("%Y-%m-%d %H:%M")
+    write_json("reels.json", {"reels": [], "accounts": [], "fetchedAt": now})
+    write_json("x.json", {"posts": [], "accounts": [], "fetchedAt": now})
+    write_json("threads.json", {"posts": [], "accounts": [], "fetchedAt": now})
+    print("릴스·X·스레드: 수집 안 함")
 
     posts, accounts, fetched = server.get_tiktok(False)
     posts = posts[:100]

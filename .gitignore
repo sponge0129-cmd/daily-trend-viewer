@@ -8,3 +8,4 @@ _site/
 .claude/
 seed_task.log
 ig_token.json
+ig_cache.json
