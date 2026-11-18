@@ -90,7 +90,7 @@ TIKWM_BASE = "https://www.tikwm.com/api"
 TIKTOK_REGION = "KR"
 
 # ---------------------------------------------------------------- AI 영상 탭
-AI_YT_QUERIES = ["AI 영상 제작", "AI 영상 생성", "sora ai video", "runway kling veo"]
+AI_YT_QUERIES = ["클로드 사용법", "제미나이 사용법", "AI 활용법", "AI 자동화 만들기"]  # 11/18 로기: 배우는 영상만 모이게 좁힘
 NEWS_FEEDS = [
     ("국내", "https://news.google.com/rss/search?q=" +
      quote('AI 영상 생성 OR "AI 비디오" OR 영상생성모델') + "&hl=ko&gl=KR&ceid=KR:ko"),
