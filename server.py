@@ -18,7 +18,7 @@ import urllib.error
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import urlparse, parse_qs, quote, urlencode
 
 PORT = 8778
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -354,13 +354,73 @@ def fetch_ig_reels(username: str):
     return reels
 
 
+# ---------------------------------------------------------------- 릴스: 메타 공식 API
+# 인스타 프로페셔널(비즈니스·크리에이터) 계정 토큰이 있으면 공식 Graph API의
+# business_discovery로 다른 프로페셔널 계정의 릴스를 조회수·좋아요·댓글과 함께 가져옵니다.
+# 토큰은 환경변수 IG_ACCESS_TOKEN·IG_USER_ID 또는 같은 폴더의 ig_token.json
+# ({"access_token": "...", "ig_user_id": "..."})에 둡니다. 깃에 올리지 마세요(.gitignore).
+IG_GRAPH = "https://graph.facebook.com/v23.0"
+IG_TOKEN_FILE = os.path.join(BASE_DIR, "ig_token.json")
+
+
+def ig_official_credentials():
+    token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
+    uid = os.environ.get("IG_USER_ID", "").strip()
+    if not (token and uid) and os.path.exists(IG_TOKEN_FILE):
+        try:
+            with open(IG_TOKEN_FILE, encoding="utf-8") as f:
+                d = json.load(f)
+            token = token or str(d.get("access_token", "")).strip()
+            uid = uid or str(d.get("ig_user_id", "")).strip()
+        except Exception:
+            pass
+    return (token, uid) if token and uid else None
+
+
+def fetch_ig_reels_official(username: str, cred):
+    token, uid = cred
+    fields = ("business_discovery.username(%s){media.limit(25){media_product_type,"
+              "caption,view_count,like_count,comments_count,permalink,timestamp,"
+              "thumbnail_url,media_url}}" % username)
+    url = "%s/%s?%s" % (IG_GRAPH, uid, urlencode({"fields": fields, "access_token": token}))
+    try:
+        _, body = http_get(url, timeout=20)
+        media = json.loads(body.decode("utf-8"))["business_discovery"]["media"]["data"]
+    except Exception:
+        return []  # 개인 계정·없는 계정·토큰 만료는 건너뜀
+    reels = []
+    for m in media:
+        if m.get("media_product_type") != "REELS":
+            continue
+        taken = 0
+        try:
+            taken = int(datetime.datetime.strptime(
+                m["timestamp"][:19], "%Y-%m-%dT%H:%M:%S").replace(
+                tzinfo=datetime.timezone.utc).timestamp())
+        except Exception:
+            pass
+        reels.append({
+            "account": username,
+            "title": (m.get("caption") or "").split("\n")[0][:120] or "(설명 없음)",
+            "views": int(m.get("view_count") or 0),
+            "likes": int(m.get("like_count") or 0),
+            "comments": int(m.get("comments_count") or 0),
+            "thumbnail": m.get("thumbnail_url") or m.get("media_url") or "",
+            "url": m.get("permalink", ""),
+            "takenAt": taken,
+        })
+    return reels[:12]
+
+
 def get_reels(force: bool):
     accounts = load_accounts(ACCOUNTS_FILE, DEFAULT_IG_ACCOUNTS)
+    cred = ig_official_credentials()
 
     def fetch():
-        # 계정당 상세 페이지를 여러 번 조회하므로 동시성을 낮게 유지합니다
+        # 공식 API 토큰이 있으면 공식 경로, 없으면 미러(imginn) 경로
+        worker = (lambda a: fetch_ig_reels_official(a, cred)) if cred else fetch_ig_reels
         with ThreadPoolExecutor(max_workers=3) as pool:
-            results = pool.map(fetch_ig_reels, accounts)
+            results = pool.map(worker, accounts)
         merged = [r for chunk in results for r in chunk]
         merged.sort(key=lambda r: (r["views"], r["likes"]), reverse=True)
         return merged
